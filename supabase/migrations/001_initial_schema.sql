@@ -383,26 +383,8 @@ CREATE INDEX idx_hangouts_group      ON hangouts(group_id);
 CREATE INDEX idx_hangouts_status     ON hangouts(status);
 CREATE INDEX idx_hangouts_scheduled  ON hangouts(scheduled_start, scheduled_end);
 
--- Policies
-CREATE POLICY hangouts_select ON hangouts
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM hangout_participants hp
-      WHERE hp.hangout_id = hangouts.id
-        AND hp.user_id = auth.uid()
-    )
-    OR auth.uid() = created_by
-  );
-
-CREATE POLICY hangouts_insert ON hangouts
-  FOR INSERT WITH CHECK (auth.uid() = created_by);
-
-CREATE POLICY hangouts_update ON hangouts
-  FOR UPDATE USING (auth.uid() = created_by)
-  WITH CHECK (auth.uid() = created_by);
-
 -- ===========================================================================
--- 10. hangout_participants
+-- 10. hangout_participants (moved before hangouts/itinerary policies)
 -- ===========================================================================
 CREATE TABLE hangout_participants (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -420,7 +402,25 @@ ALTER TABLE hangout_participants ENABLE ROW LEVEL SECURITY;
 CREATE INDEX idx_hangout_participants_hangout ON hangout_participants(hangout_id);
 CREATE INDEX idx_hangout_participants_user    ON hangout_participants(user_id);
 
--- Policies
+-- Policies for hangouts (after hangout_participants exists)
+CREATE POLICY hangouts_select ON hangouts
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM hangout_participants hp
+      WHERE hp.hangout_id = hangouts.id
+        AND hp.user_id = auth.uid()
+    )
+    OR auth.uid() = created_by
+  );
+
+CREATE POLICY hangouts_insert ON hangouts
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+CREATE POLICY hangouts_update ON hangouts
+  FOR UPDATE USING (auth.uid() = created_by)
+  WITH CHECK (auth.uid() = created_by);
+
+-- Policies for hangout_participants
 CREATE POLICY hangout_participants_select ON hangout_participants
   FOR SELECT USING (
     EXISTS (
