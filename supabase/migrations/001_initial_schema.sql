@@ -193,7 +193,40 @@ ALTER TABLE hangout_availability ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX idx_hangout_availability_user ON hangout_availability(user_id);
 
--- Policies
+-- ===========================================================================
+-- 6. friendships  (moved before hangout_availability policies, which reference it)
+-- ===========================================================================
+CREATE TABLE friendships (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  requester_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  addressee_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','accepted','blocked')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at   TIMESTAMPTZ,
+
+  UNIQUE (requester_id, addressee_id),
+  CHECK (requester_id != addressee_id)
+);
+
+ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX idx_friendships_requester ON friendships(requester_id);
+CREATE INDEX idx_friendships_addressee ON friendships(addressee_id);
+CREATE INDEX idx_friendships_status    ON friendships(status);
+
+-- Policies for friendships
+CREATE POLICY friendships_select ON friendships
+  FOR SELECT USING (auth.uid() IN (requester_id, addressee_id));
+
+CREATE POLICY friendships_insert ON friendships
+  FOR INSERT WITH CHECK (auth.uid() = requester_id);
+
+CREATE POLICY friendships_update ON friendships
+  FOR UPDATE USING (auth.uid() IN (requester_id, addressee_id))
+  WITH CHECK (auth.uid() IN (requester_id, addressee_id));
+
+-- Policies for hangout_availability (after friendships exists)
 CREATE POLICY hangout_availability_select_own ON hangout_availability
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -221,39 +254,6 @@ CREATE POLICY hangout_availability_delete ON hangout_availability
   FOR DELETE USING (auth.uid() = user_id);
 
 -- ===========================================================================
--- 6. friendships
--- ===========================================================================
-CREATE TABLE friendships (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  requester_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  addressee_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  status        TEXT NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending','accepted','blocked')),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  accepted_at   TIMESTAMPTZ,
-
-  UNIQUE (requester_id, addressee_id),
-  CHECK (requester_id != addressee_id)
-);
-
-ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
-
-CREATE INDEX idx_friendships_requester ON friendships(requester_id);
-CREATE INDEX idx_friendships_addressee ON friendships(addressee_id);
-CREATE INDEX idx_friendships_status    ON friendships(status);
-
--- Policies
-CREATE POLICY friendships_select ON friendships
-  FOR SELECT USING (auth.uid() IN (requester_id, addressee_id));
-
-CREATE POLICY friendships_insert ON friendships
-  FOR INSERT WITH CHECK (auth.uid() = requester_id);
-
-CREATE POLICY friendships_update ON friendships
-  FOR UPDATE USING (auth.uid() IN (requester_id, addressee_id))
-  WITH CHECK (auth.uid() IN (requester_id, addressee_id));
-
--- ===========================================================================
 -- 7. groups
 -- ===========================================================================
 CREATE TABLE groups (
@@ -272,7 +272,26 @@ CREATE TRIGGER groups_updated_at
   BEFORE UPDATE ON groups
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Policies
+-- ===========================================================================
+-- 8. group_members  (moved before groups policies, which reference it)
+-- ===========================================================================
+CREATE TABLE group_members (
+  id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id   UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  role      TEXT NOT NULL DEFAULT 'member'
+            CHECK (role IN ('admin','member')),
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE (group_id, user_id)
+);
+
+ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX idx_group_members_group ON group_members(group_id);
+CREATE INDEX idx_group_members_user  ON group_members(user_id);
+
+-- Policies for groups (after group_members exists)
 CREATE POLICY groups_select ON groups
   FOR SELECT USING (
     EXISTS (
@@ -291,25 +310,6 @@ CREATE POLICY groups_delete ON groups
 
 CREATE POLICY groups_insert ON groups
   FOR INSERT WITH CHECK (auth.uid() = created_by);
-
--- ===========================================================================
--- 8. group_members
--- ===========================================================================
-CREATE TABLE group_members (
-  id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-  user_id   UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  role      TEXT NOT NULL DEFAULT 'member'
-            CHECK (role IN ('admin','member')),
-  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  UNIQUE (group_id, user_id)
-);
-
-ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
-
-CREATE INDEX idx_group_members_group ON group_members(group_id);
-CREATE INDEX idx_group_members_user  ON group_members(user_id);
 
 -- Policies
 CREATE POLICY group_members_select ON group_members
