@@ -34,12 +34,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // TODO: Re-enable auth guard once Supabase Auth is fully configured
   // If no user and trying to access a protected route, redirect to login
-  if (!user && !isPublicRoute(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
+  // if (!user && !isPublicRoute(pathname)) {
+  //   const url = request.nextUrl.clone();
+  //   url.pathname = '/login';
+  //   return NextResponse.redirect(url);
+  // }
 
   // If user exists and on login/signup, redirect to home
   if (user && (pathname === '/login' || pathname === '/signup')) {
